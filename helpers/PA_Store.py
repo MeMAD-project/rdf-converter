@@ -49,6 +49,10 @@ class PA_Store:
             os.makedirs(dirname(self.path))
     
     
+    def get_graph(self):
+        return self.graph
+        
+
     def save(self, save_path = None):
         """ serialize the graph into Turtle (to different path if the argument is given) """
         self.graph.serialize(save_apth if save_path else self.path, format='turtle')
@@ -90,6 +94,8 @@ class PA_Store:
         elif resource in ['timeslot', 'collection']:
             name_cleaned = self.clean(data['name'])
             return URIRef(base + data['source'].lower() + '/' + name_cleaned)
+        elif resource == 'history':
+            return URIRef(str(data['program_uri']) + '/publication')
         elif resource == 'publication':
             datetime = ''.join(c for c in data['datetime'] if c in '0123456789')
             n = data['n']
@@ -134,7 +140,7 @@ class PA_Store:
         except Exception:
             print('The provided file doesn\'t have the appropriate Professional Archive format')
 
-        if "Date d'enregistrement" in entry:
+        if entry['Canal de diffusion'] in ['France Inter', 'France Culture']:
             self.process_program(entry, 'radio_program', autosave)
         else:
             self.process_program(entry, 'tv_program', autosave)
@@ -201,7 +207,7 @@ class PA_Store:
             self.add_to_graph((program_uri, EBUCore.isPartOf, source_program_uri))
             self.add_to_graph((program_uri, RDF.type, EBUCore.Part))
         else:
-            program_type = EBUCore.TVProgramme if entry_type == 'radio_program' else EBUCore.RadioProgramme
+            program_type = EBUCore.RadioProgramme if entry_type == 'radio_program' else EBUCore.TVProgramme
             self.add_to_graph((program_uri, RDF.type, program_type))
         
         self.add_to_graph((program_uri, EBUCore.title, Literal(title)))
@@ -221,11 +227,11 @@ class PA_Store:
         
         if collection_uri:
             self.add_to_graph((collection_uri, EBUCore.isParentOf, program_uri))
-            self.add_to_graph((program_uri, EBUCore.isMemberOf, collection_uri))
+            # self.add_to_graph((program_uri, EBUCore.isMemberOf, collection_uri))
         
         elif timeslot_uri:
             self.add_to_graph((timeslot_uri, EBUCore.isParentOf, program_uri))
-            self.add_to_graph((program_uri, EBUCore.isMemberOf, timeslot_uri))
+            # self.add_to_graph((program_uri, EBUCore.isMemberOf, timeslot_uri))
         
         return program_uri, program_id
     
@@ -256,7 +262,7 @@ class PA_Store:
         
         if timeslot_uri:
             self.add_to_graph((timeslot_uri, EBUCore.isParentOf, collection_uri))
-            self.add_to_graph((collection_uri, EBUCore.isMemberOf, timeslot_uri))
+            # self.add_to_graph((collection_uri, EBUCore.isMemberOf, timeslot_uri))
         
         return collection_uri
     
@@ -292,8 +298,8 @@ class PA_Store:
         self.add_to_graph((record_uri, RDF.type, MeMAD.Record))
         self.add_to_graph((program_uri, MeMAD.hasRecord, record_uri))
         self.add_to_graph((record_uri, EBUCore.dateCreated, t_creation_date))
-        self.add_to_graph((record_uri, EBUCore.dateUpdated, t_update_date))
-        self.add_to_graph((record_uri, EBUCore.language, t_record_language))
+        self.add_to_graph((record_uri, EBUCore.dateModified, t_update_date))
+        self.add_to_graph((record_uri, EBUCore.hasLanguage, t_record_language))
         self.add_to_graph((record_uri, EBUCore.hasType,  Literal(record_type)))
     
     
@@ -305,7 +311,7 @@ class PA_Store:
         material_note  = None if 'Matériels  (Détail)' not in entry else entry['Matériels  (Détail)'].strip().replace('\r', '')
 
         self.add_to_graph((media_uri, RDF.type, EBUCore.MediaResource))
-        self.add_to_graph((program_uri, EBUCore.isInstanciatedBy, media_uri))
+        self.add_to_graph((program_uri, EBUCore.isInstantiatedBy, media_uri))
         self.add_to_graph((media_uri, RDFS.comment, Literal('Identifiant Matériels: ' + material_id if material_id else None)))
         self.add_to_graph((media_uri, RDFS.comment, Literal('Matériels  (Détail): ' + material_note if material_note else None)))
     
@@ -369,17 +375,34 @@ class PA_Store:
     
     def add_pubevent_metadata(self, entry, program_uri, channel_uri):
         broadcast_date = entry['Date de diffusion']
-        broadcast_time = '00:00:00' if 'Heure de diffusion' not in entry else entry['Heure de diffusion']
         geo_scope      = entry['Extension géographique (info.)']
         duration       = entry['Durée']
         
+
+        if 'Heure de diffusion' not in entry:
+            diff = entry['Diffusion (aff.)']
+            if '-heure:' not in diff:
+                h = '00:00:00'
+            else:
+                _, h = diff.split('-heure:')
+                broadcast_time = h[:8]
+        else:
+            broadcast_time = entry['Heure de diffusion']
+
         t_duration       = self.transform('duration', duration)
         t_broadcast_date = self.transform('datetime', broadcast_date+broadcast_time)
 
         pubevent_uri = self.encode_uri('publication', {'program_uri': program_uri, 'datetime':broadcast_date+broadcast_time, 'n': '0'})
+        history_uri  = self.encode_uri('history', {'program_uri': program_uri})
         
+        self.add_to_graph((history_uri, RDF.type, EBUCore.PublicationHistory))
+        self.add_to_graph((program_uri, EBUCore.hasPublicationHistory, history_uri))
+        self.add_to_graph((history_uri,  EBUCore.hasPublicationEvent, pubevent_uri))
+
+        self.add_to_graph((pubevent_uri, RDF.type, EBUCore.PublicationEvent))
         self.add_to_graph((pubevent_uri, EBUCore.hasPublicationStartDateTime, t_broadcast_date))
         self.add_to_graph((pubevent_uri, RDF.type, EBUCore.PublicationEvent))
+        self.add_to_graph((pubevent_uri, EBUCore.hasPublicationStartDateTime, t_broadcast_date))
         self.add_to_graph((pubevent_uri, EBUCore.publishes, program_uri))
         self.add_to_graph((pubevent_uri, EBUCore.isReleasedBy, channel_uri))
         self.add_to_graph((pubevent_uri, EBUCore.duration, t_duration))

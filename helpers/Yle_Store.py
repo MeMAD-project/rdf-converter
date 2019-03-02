@@ -47,6 +47,10 @@ class Yle_Store:
             os.makedirs(dirname(self.path))
 
         
+    def get_graph(self):
+        return self.graph
+        
+
     def save(self, save_path = None):
         """ serialize the graph into Turtle (to different path if the argument is given) """
         self.graph.serialize(save_apth if save_path else self.path, format='turtle')
@@ -100,7 +104,9 @@ class Yle_Store:
         elif resource == 'publication':
             date = ''.join(c for c in data['datetime'] if c in '0123456789')
             n = str(data['n'])
-            return URIRef(str(data['program_uri'] + '/publication/' + n))
+            return URIRef(str(data['program_uri']) + '/publication/' + n)
+        elif resource == 'history':
+            return URIRef(str(data['program_uri']) + '/publication')
         elif resource == 'media':
             hashed = sha1(data['media_id'].encode()).hexdigest() 
             return URIRef(base + 'media/' + hashed)
@@ -134,7 +140,7 @@ class Yle_Store:
         
         elif field == 'episode_language':
             languages = json.load(open('mappings/yle_episode_lang.json'))
-            return Literal(languages[value])
+            return Literal(languages[value.lower()])
         
         elif field == 'duration_tc':
             h, m, s, ms = value.split(':')
@@ -174,7 +180,7 @@ class Yle_Store:
     
         elif field == 'subtitles_language':
             subtitles_languages = json.load(open('mappings/yle_subtitles_lang.json'))
-            Literal(subtitles_languages[value])
+            Literal(subtitles_languages[value.lower()])
             
         elif field == 'sub_format':
             formats = {}
@@ -182,7 +188,7 @@ class Yle_Store:
 
         elif field == 'audio_language':
             audio_languages = json.load(open('mappings/yle_audio_lang.json'))
-            return Literal(audio_languages[value])
+            return Literal(audio_languages[value.lower()])
         
         elif field == 'contributor_role':
             roles = json.load(open('mappings/yle_id2role.json'))
@@ -231,7 +237,6 @@ class Yle_Store:
         
         self.add_to_graph((program_uri, RDF.type, EBUCore.TVProgramme))
         self.add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(guid)))
-        self.add_to_graph((program_uri, MeMAD.hasMetroIdentifier, Literal(metro_id)))
         self.add_to_graph((program_uri, EBUCore.episodeNumber, Literal(number, datatype=XSD.nonNegativeInteger)))
         self.add_to_graph((program_uri, MeMAD.hasGUID, Literal(guid)))
         self.add_to_graph((program_uri, EBUCore.description, Literal(description, lang='fi')))
@@ -252,8 +257,10 @@ class Yle_Store:
         series_uri    = self.encode_uri('series', {'name': series_name, 'source': 'yle'})
         
         self.add_to_graph((series_uri, RDF.type, EBUCore.Series))
+        self.add_to_graph((series_uri, RDF.type, EBUCore.Collection))
         self.add_to_graph((series_uri, EBUCore.title, Literal(series_name)))
         self.add_to_graph((series_uri, EBUCore.hasEpisode, program_uri))
+        self.add_to_graph((series_uri, EBUCore.isParentOf, program_uri))
     
     def add_firstrun_metadata(self, root, program_uri):
         firstrun_date = root.find("./MAObject[1]/Meta/[@name='FIRSTRUN_DATE']").text
@@ -263,7 +270,7 @@ class Yle_Store:
         
         t_firstrun_datetime = self.transform('datetime', firstrun_date + firstrun_time)
         
-        self.add_to_graph((first_pub_uri, EBUCore.publishes, program_uri))
+        # self.add_to_graph((first_pub_uri, EBUCore.publishes, program_uri))
         self.add_to_graph((first_pub_uri, RDF.type, MeMAD.FirstRun))
         self.add_to_graph((first_pub_uri, EBUCore.publicationStartDateTime, t_firstrun_datetime))
         
@@ -272,8 +279,9 @@ class Yle_Store:
         media_framerate    = root.find("./MAObject[1]/Meta/[@name='SYSTEM_FRAMERATE_FPS']").text 
         media_video_format = root.find("./MAObject[1]/Meta/[@name='VIDEO_FORMAT']").text 
         media_aspect_ratio = root.find("./MAObject[1]/Meta/[@name='ASPECT_RATIO']").text
+        metro_id           = root.find("./MAObject[1]/Meta/[@name='METRO_PROGRAMME_ID']").text
 
-        media_uri     = self.encode_uri('media', {'media_id': media_id})
+        media_uri     = self.encode_uri('media', {'media_id': metro_id})
         
         t_media_aspect_ratio_uri = self.transform('aspect_ratio', media_aspect_ratio)
         t_media_video_format     = self.transform('video_format', media_video_format)
@@ -283,7 +291,8 @@ class Yle_Store:
         self.add_to_graph((media_uri, EBUCore.hasIdentifier, Literal(media_id)))
         self.add_to_graph((media_uri, EBUCore.hasVideoEncodingFormat, t_media_video_format))
         self.add_to_graph((media_uri, EBUCore.frameRate, Literal(media_framerate, datatype=XSD.float)))
-        self.add_to_graph((program_uri, EBUCore.isInstanciatedBy, media_uri))
+        self.add_to_graph((program_uri, EBUCore.isInstantiatedBy, media_uri))
+        self.add_to_graph((media_uri, MeMAD.hasMetroIdentifier, Literal(metro_id)))
 
         return media_uri
     
@@ -328,6 +337,12 @@ class Yle_Store:
 
     def add_pubevents_metadata(self, root, program_uri):
         pubevents    = root.findall("./MVAttribute[@type='PUBLICATIONS']")
+        if len(pubevents) == 0: return
+
+        history_uri  = self.encode_uri('history',  {'program_uri': program_uri})
+        self.add_to_graph((history_uri, RDF.type, EBUCore.PublicationHistory))
+        self.add_to_graph((program_uri, EBUCore.hasPublicationHistory, history_uri))
+
         for i, pubevent in enumerate(pubevents):
             pubevent_id           = pubevent.find("./Meta[@name='PUB_ID']").text
             pubevent_datetime     = pubevent.find("./Meta[@name='PUB_DATETIME']").text
@@ -338,12 +353,16 @@ class Yle_Store:
             t_pubevent_datetime_end = self.transform('datetime', pubevent_datetime_end)
             
             channel_uri  = self.encode_uri('channel', {'name': pubevent_channel})
+            channel_code = str(channel_uri).split('/')[-1]
             self.add_to_graph((channel_uri, RDF.type, EBUCore.PublicationChannel))
-            self.add_to_graph((channel_uri, EBUCore.name, Literal(pubevent_channel)))
+            self.add_to_graph((channel_uri, EBUCore.publicationChannelName, Literal(pubevent_channel)))
+            self.add_to_graph((channel_uri, EBUCore.publicationChannelId, Literal(channel_code)))
+            self.add_to_graph((channel_uri, EBUCore.serviceDescription, Literal('TV channel')))
             
             pubevent_uri = self.encode_uri('publication', {'program_uri': program_uri, 'datetime':pubevent_datetime, 'n': i})
             self.add_to_graph((pubevent_uri, RDF.type, EBUCore.PublicationEvent))
-            self.add_to_graph((pubevent_uri, EBUCore.publishes, program_uri))
+            # self.add_to_graph((pubevent_uri, EBUCore.publishes, program_uri))
+            self.add_to_graph((history_uri,  EBUCore.hasPublicationEvent, pubevent_uri))
             self.add_to_graph((pubevent_uri, EBUCore.isReleasedBy, channel_uri))
             self.add_to_graph((pubevent_uri, EBUCore.hasPublicationStartDateTime, t_pubevent_datetime))
             self.add_to_graph((pubevent_uri, EBUCore.hasPublicationEndDateTime, t_pubevent_datetime_end))
@@ -390,6 +409,8 @@ class Yle_Store:
             contributor_name = contributor.find('./Meta[@name="CONT_PERSON_NAME"]').text
             contributor_role = contributor.find('./Meta[@name="CONT_PERSON_ROLE"]').text
             if contributor_role : contributor_role = contributor_role.strip()
+
+            if not contributor_name: continue
 
             t_contributor_role = self.transform('contributor_role', contributor_role)
 

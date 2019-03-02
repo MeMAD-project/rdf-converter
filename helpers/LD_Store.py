@@ -49,6 +49,10 @@ class LD_Store:
             os.makedirs(dirname(self.path))
     
     
+    def get_graph(self):
+        return self.graph
+        
+
     def save(self, save_path = None):
         """ serialize the graph into Turtle (to different path if the argument is given) """
         self.graph.serialize(save_apth if save_path else self.path, format='turtle')
@@ -63,7 +67,7 @@ class LD_Store:
     
     def clean(self, s):
         """ Transforming free text strings into ascii slugs """
-        to_dash = '\\/\',.":;[]()!? #=&$%@{«°»¿=>+*'
+        to_dash = '\\/\',.":;[]()!? #=&$%@{«°»¿=>+*'
         cleaned = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
         cleaned = ''.join('-' if c in to_dash else c for c in cleaned)
         cleaned = ''.join(c if i == 0 or (c == '-' and cleaned[i-1]) != '-' else '' for i,c in enumerate(cleaned))
@@ -92,6 +96,8 @@ class LD_Store:
             name_cleaned = self.clean(data['name'])
             source = data['channel'].lower()
             return URIRef(base + source + '/' + name_cleaned)
+        elif resource == 'history':
+            return URIRef(str(data['program_uri']) + '/publication')
         elif resource == 'publication':
             datetime = data['datetime'].replace(' ', '').replace('-', '').replace(':', '')
             n = data['n']
@@ -170,8 +176,8 @@ class LD_Store:
             parent = 'orphan'
 
         channel_uri, channel_code, channel_type = self.add_channel_metadata(entry)
+
         program_uri = self.encode_uri('program', {'id': program_id, 'source': channel_code, 'parent':  parent})
-      
         segment_uri = self.add_segment_metadata(entry, program_uri, channel_code)
 
         self.add_contributors_metadata(entry, segment_uri)
@@ -185,6 +191,7 @@ class LD_Store:
         program_id       = entry['Identifiant'] # == notice_id
         channel_name     = entry['Chaine']
         duration         = entry['DureeSecondes']
+        title            = entry['TitreEmission']
         summary          = entry['Resume'].strip().replace('\r', '')
         lead             = entry['Chapeau'].strip().replace('\r', '')
         note_dispositif  = entry['Dispositif'].strip().replace('\r', '')
@@ -204,6 +211,7 @@ class LD_Store:
         program_type   = EBUCore.RadioProgramme if channel_type == 'Radio' else EBUCore.TVProgramme
         
         self.add_to_graph((program_uri, RDF.type, program_type))
+        self.add_to_graph((program_uri, EBUCore.title, Literal(title)))
         self.add_to_graph((program_uri, EBUCore.duration, t_duration))
         self.add_to_graph((program_uri, EBUCore.summary, Literal(summary, lang='fr')))
         self.add_to_graph((program_uri, MeMAD.lead, Literal(lead, lang='fr')))
@@ -213,11 +221,11 @@ class LD_Store:
         
         if collection_uri:
             self.add_to_graph((collection_uri, EBUCore.isParentOf, program_uri))
-            self.add_to_graph((program_uri, EBUCore.isMemberOf, collection_uri))
+            # self.add_to_graph((program_uri, EBUCore.isMemberOf, collection_uri))
         
         elif timeslot_uri:
             self.add_to_graph((timeslot_uri, EBUCore.isParentOf, program_uri))
-            self.add_to_graph((program_uri, EBUCore.isMemberOf, timeslot_uri))
+            # self.add_to_graph((program_uri, EBUCore.isMemberOf, timeslot_uri))
         
         return program_uri, program_id
     
@@ -229,7 +237,7 @@ class LD_Store:
         media_uri     = self.encode_uri('media', {'id': program_id})
 
         self.add_to_graph((media_uri, RDF.type, EBUCore.MediaResource))
-        self.add_to_graph((program_uri, EBUCore.isInstanciatedBy, media_uri))
+        self.add_to_graph((program_uri, EBUCore.isInstantiatedBy, media_uri))
     
         self.add_to_graph((media_uri, MeMAD.hasImediaIdentifier, Literal(Imedia_id)))
         self.add_to_graph((media_uri, MeMAD.hasMediametrieIdentifier, Literal(Mediametrie_id)))
@@ -278,7 +286,7 @@ class LD_Store:
         
         if timeslot_uri:
             self.add_to_graph((timeslot_uri, EBUCore.isParentOf, collection_uri))
-            self.add_to_graph((collection_uri, EBUCore.isMemberOf, timeslot_uri))
+            # self.add_to_graph((collection_uri, EBUCore.isMemberOf, timeslot_uri))
         
         return collection_uri
     
@@ -334,8 +342,13 @@ class LD_Store:
         t_pubevent_datetime     = self.transform('datetime', pubevent_datetime)
         t_pubevent_datetime_end = self.transform('datetime', pubevent_datetime_end)
 
+        history_uri = self.encode_uri('history', {'program_uri': program_uri})
         pubevent_uri = self.encode_uri('publication', {'program_uri': program_uri, 'datetime':pubevent_datetime, 'n': '0'})
-        
+
+        self.add_to_graph((history_uri, RDF.type, EBUCore.PublicationHistory))
+        self.add_to_graph((program_uri, EBUCore.hasPublicationHistory, history_uri))
+        self.add_to_graph((history_uri, EBUCore.hasPublicationEvent, pubevent_uri))
+
         self.add_to_graph((pubevent_uri, RDF.type, EBUCore.PublicationEvent))
         self.add_to_graph((pubevent_uri, EBUCore.publishes, program_uri))
         self.add_to_graph((pubevent_uri, EBUCore.isReleasedBy, channel_uri))
@@ -350,7 +363,12 @@ class LD_Store:
         start_date = entry['startDate']
         duration   = entry['DureeSecondes']
         lead       = entry['Chapeau']
+        segment_title = entry['TitreSujet']
+        program_title = entry['TitreEmission']
 
+        timeslot_uri   = self.add_timeslot_metadata(entry, channel_code)
+        collection_uri = self.add_collection_metadata(entry, channel_code, timeslot_uri)
+        
         segment_uri = self.encode_uri('segment', {'id': segment_id, 'channel': channel_code})
         
         t_start_date = self.transform('datetime', start_date) if duration else None
@@ -358,8 +376,11 @@ class LD_Store:
         
         # Adding entities to the graph
         self.add_to_graph((program_uri, EBUCore.hasPart, segment_uri))
-        self.add_to_graph((segment_uri, EBUCore.isPartOf, program_uri))
+        self.add_to_graph((program_uri, EBUCore.title, Literal(program_title)))
         self.add_to_graph((segment_uri, RDF.type, EBUCore.Part))
+        self.add_to_graph((segment_uri, EBUCore.title, Literal(segment_title)))
+        self.add_to_graph((segment_uri, EBUCore.isPartOf, program_uri))
+        self.add_to_graph((segment_uri, EBUCore.isPartOf, program_uri))
         self.add_to_graph((segment_uri, EBUCore.start, t_start_date))
         self.add_to_graph((segment_uri, EBUCore.duration, t_duration))
         self.add_to_graph((segment_uri, MeMAD.lead, Literal(lead, lang='fr')))
