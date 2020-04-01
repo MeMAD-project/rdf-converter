@@ -10,7 +10,7 @@ All the scripts are written in Python3. To run these scripts, the following libr
 ### Running the script
 
 ```
-usage: [ld|pa|yle]_converter.py [-h] [-p PATH] [-o OUTPUT] [-f FLOW_MAPPING] [-k]
+usage: python3 [ld|pa|yle]_converter.py [-h] [-p PATH] [-o OUTPUT] [-f FLOW_MAPPING] [-k]
 
 MeMAD Converter
 
@@ -26,3 +26,5 @@ optional arguments:
   -k, --keep_mappings   add this flag to generate CSV files for mapping
                         Programs to their URIs
 ```
+
+!! For the subtitles mapping to work on INA's data, the Legal Deposit graph should be generated first (with the `-k` parameter) to guarantee that every subtitle line can be matched to its original program.

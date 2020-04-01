@@ -240,7 +240,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     except Exception:
         raise Exception('The provided file doesn\'t have the appropriate Professional Archive format')
 
-    radio_program = entry['Canal de diffusion'] in ['France Inter', 'France Culture']
+    radio_program = entry['Canal de diffusion'] in ['France Inter', 'France Culture', 'FC', 'FI']
 
 
     # Source
@@ -279,7 +279,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     
 
     if program_id.count('_') == 2: # this entry is a segment of a program
-        source_program_uri = encode_uri('program', {'id': program_id[:-4], 'source': channel_code, 'parent': parent})
+        source_program_uri = encode_uri('program', {'id': program_id_2[:-4], 'source': channel_code, 'parent': parent})
         add_to_graph((program_uri, RDF.type, EBUCore.Part))
         add_to_graph((source_program_uri, EBUCore.hasPart, program_uri))
     else:
@@ -313,7 +313,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     add_to_graph((program_uri, MeMAD.corpus, Literal(corpus)))
     add_to_graph((program_uri, SKOS.note, Literal(('[Notes] ' + notes) if notes else None)))
     add_to_graph((program_uri, SKOS.note, Literal(('[Legal Notes] ' + legal_notes) if legal_notes else None)))
-    add_to_graph((program_uri, MeMAD.sequence, Literal(sequences)))
+    add_to_graph((program_uri, MeMAD.log, Literal(sequences)))
     add_to_graph((program_uri, MeMAD.broadcasting, Literal(broadcasting)))
 
 
@@ -345,6 +345,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     add_to_graph((record_uri, RDF.type, MeMAD.Record))
     add_to_graph((program_uri, MeMAD.hasRecord, record_uri))
     add_to_graph((record_uri, EBUCore.hasIdentifier, Literal(program_id)))
+    add_to_graph((record_uri, EBUCore.hasIdentifier, Literal(program_id_2)))
     add_to_graph((record_uri, EBUCore.dateCreated, t_creation_date))
     add_to_graph((record_uri, EBUCore.dateModified, t_update_date))
     add_to_graph((record_uri, EBUCore.hasLanguage, Literal(record_language)))
@@ -356,7 +357,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
         material_id    = material_id.strip().replace('\r', '')
         material_note  = entry['Matériels  (Détail)'].strip().replace('\r', '')
 
-        media_uri      = encode_uri('media', {'id': program_id})
+        media_uri      = encode_uri('media', {'id': program_id_2})
 
         add_to_graph((media_uri, RDF.type, EBUCore.MediaResource))
         add_to_graph((program_uri, EBUCore.isInstantiatedBy, media_uri))
@@ -456,6 +457,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
         add_to_graph((pubevent_uri, EBUCore.isReleasedBy, channel_uri))
         add_to_graph((pubevent_uri, EBUCore.duration, transform('duration', duration)))
         add_to_graph((pubevent_uri, EBUCore.hasPublicationRegion, Literal(geo_scope)))
+        add_to_graph((pubevent_uri, EBUCore.firstShowing, Literal("1", datatype=XSD.boolean)))
 
 
 print('Serializing the graph ..')

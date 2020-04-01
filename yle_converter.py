@@ -266,7 +266,7 @@ for dataset in repos_to_process: # ['14-may2019']: #
         add_to_graph((program_uri, DCTERMS.publisher, Literal("Yle")))
         add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(guid)))
         add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(filename.split('.')[0])))
-        add_to_graph((program_uri, EBUCore.filename, Literal(filename)))
+        # add_to_graph((program_uri, EBUCore.filename, Literal(filename)))
         add_to_graph((program_uri, EBUCore.hasSubject, Literal(subject)))
         add_to_graph((program_uri, EBUCore.episodeNumber, Literal(number)))
         add_to_graph((program_uri, EBUCore.description, Literal(description)))
@@ -299,7 +299,7 @@ for dataset in repos_to_process: # ['14-may2019']: #
         
         add_to_graph((media_uri, RDF.type, EBUCore.MediaResource))   
         add_to_graph((program_uri, EBUCore.isInstantiatedBy, media_uri))
-        add_to_graph((program_uri, EBUCore.filename, Literal(file)))
+        # add_to_graph((program_uri, EBUCore.filename, Literal(file)))
         add_to_graph((media_uri, MeMAD.hasMetroIdentifier, Literal(metro_id)))
         add_to_graph((media_uri, EBUCore.aspectRatio, media_aspect_ratio_uri))
         add_to_graph((media_uri, EBUCore.hasVideoEncodingFormat, media_video_format))
@@ -393,6 +393,9 @@ for dataset in repos_to_process: # ['14-may2019']: #
     
             if i == 0 and not (firstrun_date and firstrun_time):
                 add_to_graph((pubevent_uri, RDF.type, MeMAD.FirstRun))
+
+            if i == 0:
+                add_to_graph((pubevent_uri, EBUCore.firstShowing, Literal("1", datatype=XSD.boolean)))
             
     
         # Content Segments

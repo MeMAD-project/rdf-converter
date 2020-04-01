@@ -103,7 +103,7 @@ def reset_graph():
     g.bind('dcterm', DCTERMS)
 
 def add_to_graph(triplet, signal_empty_values=False):
-    
+    """ Add a non-empty triplet to the global graph g """
     if triplet[2] and len(triplet[2]) > 0 and str(triplet[2]) != 'None': # the predicate has a non-null value
         g.add(triplet)
     elif signal_empty_values:
@@ -338,7 +338,8 @@ if len(df_eall) > 0:
 	    add_to_graph((pubevent_uri, EBUCore.isReleasedBy, channel_uri))
 	    add_to_graph((pubevent_uri, EBUCore.publicationStartDateTime, pubevent_datetime))
 	    add_to_graph((pubevent_uri, EBUCore.publicationEndDateTime, pubevent_datetime_end))
-	    
+	    add_to_graph((pubevent_uri, EBUCore.firstShowing, Literal("1", datatype=XSD.boolean)))
+
 	    mapping.append((program_id, str(program_uri), channel_code, str(pubevent_datetime), str(pubevent_datetime_end)))
 
 
