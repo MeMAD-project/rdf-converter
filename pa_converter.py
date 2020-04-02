@@ -357,7 +357,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
         material_id    = material_id.strip().replace('\r', '')
         material_note  = entry['Matériels  (Détail)'].strip().replace('\r', '')
 
-        media_uri      = encode_uri('media', {'id': program_id_2})
+        media_uri   = URIRef(base + 'media/' + program_uri.split('/')[-1])
 
         add_to_graph((media_uri, RDF.type, EBUCore.MediaResource))
         add_to_graph((program_uri, EBUCore.isInstantiatedBy, media_uri))
@@ -484,7 +484,8 @@ if flow_mapping_file:
 	for obj in data:
 	    try:
 	        filename = obj['name']
-	        identifier = filename.split('.')[0][1:] if filename.startswith('R') else filename.split('.')[0]
+	        identifier = filename.split('.')[0]
+	        identifier = identifier[1:] if identifier.startswith('R') else identifier
 	        
 	        try:
 	            program     = mapping_df[mapping_df['identifier'] == identifier].iloc[0]
