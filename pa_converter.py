@@ -1,31 +1,31 @@
 # -*- coding: utf-8 -*-
 
 import os
-from os.path import exists, dirname, join, isfile
-import pandas as pd
-import numpy as np
-from rdflib import Namespace, URIRef, ConjunctiveGraph, Literal
-from rdflib.namespace import FOAF, DC, SKOS, RDF, XSD, DCTERMS
-import urllib
 import re
+import time
 import json
 import pickle
-import unicodedata
-from hashlib import sha1
-import time
-from tqdm import tqdm 
-import xml.etree.ElementTree as ET
+import urllib
 import datetime
-import datetime
-
-
 import argparse
+import unicodedata
+
+import numpy as np
+import pandas as pd
+import xml.etree.ElementTree as ET
+
+from tqdm import tqdm 
+from hashlib import sha1
+from os.path import exists, dirname, join, isfile
+from rdflib import Namespace, URIRef, ConjunctiveGraph, Literal
+from rdflib.namespace import FOAF, DC, SKOS, RDF, RDFS, XSD, DCTERMS
+
 
 parser = argparse.ArgumentParser(description='MeMAD Converter')
 parser.add_argument("-p", "--path", type=str, help="Specify the path for the file or folder to process", default='data/pa/') #, required=True)
 parser.add_argument("-o", "--output", type=str, help="Specify the path to which the TTL output would be written.", default='data/dump/')
 parser.add_argument("-s", "--subtitles", type=str, help="Specify the path to the subtitles folder.", default='data/new_ina_asr/')
-parser.add_argument("-f", "--flow_mapping", type=str, help="Specify the path to the mapping between filenames and their Flow.", default='data/yle/file_mapping.json') 
+parser.add_argument("-f", "--flow_mapping", type=str, help="Specify the path to the mapping between filenames and their Flow.", default='data/file_flow_mapping.json') 
 parser.add_argument("-k", "--keep_mappings", help="add this flag to generate CSV files for mapping Programmes to their URIs", action='store_true', default=False) 
 
 
@@ -168,6 +168,14 @@ def encode_uri(resource, data):
     elif resource == 'record':
         return URIRef(str(data['program_uri']) + '/record')
 
+    elif resource == 'role':
+        role = str(data['role']).lower().replace(' ', '_')
+        return URIRef(base + 'role/' + role)
+
+    elif resource == 'language':
+        # all entries in INA-PA are in French
+        return URIRef(base + 'language/french')
+
     else:
         raise Exception('No URI encoding for resource ' + resource)
 
@@ -213,11 +221,29 @@ def preprocess_content(t):
     
     return t
 
+def add_vocabulary():
+    roles = json.load(open('mappings/ina_code2role.json'))
+
+    # print('Adding the following roles to the graph:', ', '.join(sorted(roles_en.values())))
+    
+    for label_fr, label_en in roles.items():
+        role_uri = URIRef(base + 'role/' + label_en.lower().replace(' ', '_'))
+        add_to_graph((role_uri, RDF.type, EBUCore.Role))
+        add_to_graph((role_uri, RDFS.label, Literal(label_en)))
+        add_to_graph((role_uri, RDFS.label, Literal(label_fr, lang='fr')))
+
+    fr_uri = URIRef(base + 'language/french')
+    add_to_graph((fr_uri, RDF.type, EBUCore.Language))
+    add_to_graph((fr_uri, RDFS.label, Literal('French')))
+    add_to_graph((fr_uri, RDFS.label, Literal('Français', lang='fr')))
+
+
 g = ConjunctiveGraph()
 reset_graph()
 
-mapping = []
+add_vocabulary()
 
+mapping = []
 
 dfs = []
 for dataset in repos_to_process: # ['14-may2019']: # 
@@ -341,6 +367,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     t_update_date   = transform('date', record_update_date)
 
     record_uri = encode_uri('record', {'program_uri': program_uri})
+    language_uri  = encode_uri('language', {'language': record_language})
 
     add_to_graph((record_uri, RDF.type, MeMAD.Record))
     add_to_graph((program_uri, MeMAD.hasRecord, record_uri))
@@ -348,7 +375,8 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     add_to_graph((record_uri, EBUCore.hasIdentifier, Literal(program_id_2)))
     add_to_graph((record_uri, EBUCore.dateCreated, t_creation_date))
     add_to_graph((record_uri, EBUCore.dateModified, t_update_date))
-    add_to_graph((record_uri, EBUCore.hasLanguage, Literal(record_language)))
+    add_to_graph((record_uri, EBUCore.hasLanguage, language_uri))
+    add_to_graph((program_uri, EBUCore.hasLanguage, language_uri))
     add_to_graph((record_uri, EBUCore.hasType,  Literal(record_type)))
 
     # media
@@ -392,7 +420,10 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
             add_to_graph((program_uri, EBUCore.hasContributor, agent_uri))
             add_to_graph((agent_uri, RDF.type, EBUCore.Agent))
             add_to_graph((agent_uri, EBUCore.agentName, Literal(name)))
-            add_to_graph((agent_uri, EBUCore.hasRole, Literal(role)))
+
+            if role:
+                role_uri = encode_uri('role', {'role': role})
+                add_to_graph((agent_uri, EBUCore.hasRole, role_uri))
 
 
     # Keywords
@@ -512,7 +543,6 @@ if flow_mapping_file:
 
 
 
-
 if subtitles_path:
     print('Extracting subtitles..')
     d = []
@@ -574,14 +604,14 @@ if subtitles_path:
 
             add_to_graph((textline_uri, RDF.type, EBUCore.TextLine))
             add_to_graph((textline_uri, EBUCore.textLineContent, Literal(entry['content'])))
-            add_to_graph((textline_uri, EBUCore.textLineLanguage, Literal("FR")))
+            add_to_graph((textline_uri, EBUCore.textLineLanguage, encode_uri('language', {'language': 'Français'})))
             add_to_graph((textline_uri, EBUCore.textLineSource, Literal('ASR (Vocapia Research 5.1)')))
             add_to_graph((textline_uri, EBUCore.textLineStartTime, Literal(entry['start'], datatype=XSD.time)))
             add_to_graph((textline_uri, EBUCore.textLineEndTime, Literal(entry['end'], datatype=XSD.time)))
             add_to_graph((textline_uri, EBUCore.hasTextLineRelatedPerson, Literal(entry['speaker'] + entry['gender'])))
             add_to_graph((program_uri, EBUCore.hasRelatedTextLine, textline_uri))
-        except:
-            print("can't find "+identifier+" in INA PA")
+        except KeyError:
+            print("can't find "+identifier+" in INA PA-LD mapping")
 
     print('Serializing the subtitles ..')
     tick = time.time()

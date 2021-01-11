@@ -1,40 +1,38 @@
 # -*- coding: utf-8 -*-
 
 import os
-from os.path import exists, dirname, join, isfile
-import pandas as pd
-import numpy as np
-
-from rdflib import Namespace, URIRef, ConjunctiveGraph, Literal
-from rdflib.namespace import FOAF, DC, SKOS, RDF, XSD, DCTERMS
-import urllib
 import re
-import json
-import pickle
-import unicodedata
-from hashlib import sha1
 import time
-from tqdm import tqdm
-import xml.etree.ElementTree as ET
-import datetime
-
+import json
+import urllib
+import pickle
 import argparse
+import datetime
+import unicodedata
+import numpy as np
+import pandas as pd
+import xml.etree.ElementTree as ET
+
+from tqdm import tqdm
+from hashlib import sha1
+from os.path import exists, dirname, join, isfile
+from rdflib import Namespace, URIRef, ConjunctiveGraph, Literal
+from rdflib.namespace import FOAF, DC, SKOS, RDF, RDFS, XSD, DCTERMS
 
 
 parser = argparse.ArgumentParser(description='MeMAD Converter')
 parser.add_argument("-p", "--path", type=str, help="Specify the path for the file or folder to process", default='data/yle/') #, required=True)
 parser.add_argument("-o", "--output", type=str, help="Specify the path to which the TTL output would be written.", default='data/dump/') #, required=True)
-parser.add_argument("-f", "--flow_mapping", type=str, help="Specify the path to a file containing the mapping between filenames and their Flow identifier.",
- default='data/yle/file_mapping.json') #, required=True)
-parser.add_argument("-k", "--keep_mappings", help="add this flag to generate CSV files for mapping Programmes to their URIs", action='store_true', default=False) #, required=True)
+parser.add_argument("-f", "--flow_mapping", type=str, help="Specify the path to a file containing the mapping between filenames and their Flow identifier.", default='data/file_flow_mapping.json') #, required=True)
+parser.add_argument("-k", "--keep_mappings", help="add this flag to generate CSV files for mapping Programmes to their URIs", action='store_true', default=True) #, required=True)
 
 # parser.add_argument("-m", "--mode", choices=['metadata', 'flow', 'yle'], type=str, help="Specify which converter to use.", required=True)
 
 args = parser.parse_args()
-data_path   = args.path
-output_path = args.output
+data_path         = args.path
+output_path       = args.output
+keep_mappings     = args.keep_mappings
 flow_mapping_file = args.flow_mapping
-keep_mappings = args.keep_mappings
 
 if not exists(data_path) :
 	print('Error: the provided path does not exist.')
@@ -44,10 +42,11 @@ if not exists(output_path):
     print('Creating directory :' + dirname(output_path))
     os.makedirs(dirname(output_path))
 
-data_path = data_path + '/' if data_path[-1] != '/' else data_path
-output_path = output_path + '/' if output_path[-1] != '/' else output_path
+data_path        = data_path + '/' if data_path[-1] != '/' else data_path
+output_path      = output_path + '/' if output_path[-1] != '/' else output_path
 repos_to_process = sorted(os.listdir(data_path))
 
+# if given a path that directly contains metadata files 
 if repos_to_process[0][-3:] == 'xml':
 	dataset_name = data_path.split('/')[-2]
 	data_path = data_path[:-(len(dataset_name)+1)]
@@ -77,7 +76,6 @@ def reset_graph(path=''):
     g.bind('dcterm', DCTERMS)
 
 def add_to_graph(triplet, signal_empty_values=False):
-    
     if triplet[2] and len(triplet[2]) > 0 and str(triplet[2]) != 'None': # the predicate has a non-null value
         g.add(triplet)
     elif signal_empty_values:
@@ -105,7 +103,8 @@ def transform(field, value):
 
     elif field == 'episode_language':
         languages = json.load(open('mappings/yle_episode_lang.json'))
-        return Literal(languages[value.lower()])
+        # return Literal(languages[value.lower()])
+        return languages[value.lower()]
 
     elif field == 'duration_tc':
         h, m, s, ms = value.split(':')
@@ -145,7 +144,7 @@ def transform(field, value):
 
     elif field == 'subtitles_language':
         subtitles_languages = json.load(open('mappings/yle_subtitles_lang.json'))
-        Literal(subtitles_languages[value.lower()])
+        return subtitles_languages[value.lower()]
 
     elif field == 'sub_format':
         formats = {}
@@ -153,12 +152,11 @@ def transform(field, value):
 
     elif field == 'audio_language':
         audio_languages = json.load(open('mappings/yle_audio_lang.json'))
-        return Literal(audio_languages[value.lower()])
+        return audio_languages[value.lower()]
 
     elif field == 'contributor_role':
-        roles = json.load(open('mappings/yle_id2role.json'))
-        role = roles[value] # value is the id
-        return Literal(role)
+        roles = json.load(open('mappings/yle_id2role_en.json'))
+        return roles[value] # value is the id
 
     else:
         raise Exception('Field ' + field + ' isn\'t mapped for value ' + value)
@@ -193,8 +191,47 @@ def encode_uri(resource, data):
         agent_name_clean = clean_string(data['name'])
         return URIRef(base + 'agent/' + agent_name_clean)
 
+    elif resource == 'language':
+        language = str(data['language']).lower().replace(' ', '_')
+        return URIRef(base + 'language/' + language)
+    elif resource == 'role':
+        role = str(data['role']).lower().replace(' ', '_')
+        return URIRef(base + 'role/' + role)
+    
     else:
         raise Exception('No URI encoding for resource ' + resource)
+
+
+def add_languages():
+    mapping_files = ['yle_episode_lang.json', 'yle_subtitles_lang.json', 'yle_audio_lang.json']
+    unique_values = set()
+
+    for file in mapping_files:
+        dic = json.load(open('mappings/' + file))
+        for v in dic.values():
+            for l in v.split('/'):
+                unique_values.add(l.lower())
+
+    # print('Adding the following languages to the graph:', ', '.join(sorted(unique_values)))
+
+    for language in unique_values:
+        language_uri = URIRef(base + 'language/' + language.lower().replace(' ', '_'))
+        langauge_label = language[0].upper() + language[1:]
+        add_to_graph((language_uri, RDF.type, EBUCore.Language))
+        add_to_graph((language_uri, RDFS.label, Literal(langauge_label)))
+
+def add_roles():
+    roles_fi = json.load(open('mappings/yle_id2role.json'))
+    roles_en = json.load(open('mappings/yle_id2role_en.json'))
+
+    # print('Adding the following roles to the graph:', ', '.join(sorted(roles_en.values())))
+    
+    for code, label_fi in roles_fi.items():
+        label_en = roles_en[code]
+        role_uri = URIRef(base + 'role/' + label_en.lower().replace(' ', '_').replace('/', '_'))
+        add_to_graph((role_uri, RDF.type, EBUCore.Role))
+        add_to_graph((role_uri, RDFS.label, Literal(label_en)))
+        add_to_graph((role_uri, RDFS.label, Literal(label_fi, lang='fi')))
 
 
 mapping = []
@@ -207,8 +244,14 @@ for dataset in repos_to_process: # ['14-may2019']: #
         continue
     print('Processing', dataset, '..')
     reset_graph()
+    
+    # Adding controlled vocabularies to the Knowledge Graph
+    add_languages()
+    add_roles()
+    
     files = os.listdir(data_path+dataset)
-    for file in tqdm(files):
+    for ii, file in tqdm(enumerate(files)):
+
         root = ET.parse(data_path+dataset+'/'+file).getroot()
         guid = root.find("./MAObject[1]/GUID").text
 
@@ -255,13 +298,12 @@ for dataset in repos_to_process: # ['14-may2019']: #
         web_desc       = root.find("./MAObject[1]/Meta/[@name='WEB_DESCRIPTION']").text 
         web_desc_sw    = root.find("./MAObject[1]/Meta/[@name='WEB_DESCRIPTION_SWE']").text 
         
-        language       = transform('episode_language', language)
+        languages      = transform('episode_language', language)
         duration_tc    = transform('duration_tc', duration_tc)
         archiving_date = transform('date', archiving_date)
-        class_subs.add(class_sub)
         class_sub      = class_sub if ']' not in class_sub else class_sub.split(']')[1][1:]
+        class_subs.add(class_sub)
 
-        
         add_to_graph((program_uri, RDF.type, EBUCore.TVProgramme))
         add_to_graph((program_uri, DCTERMS.publisher, Literal("Yle")))
         add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(guid)))
@@ -273,17 +315,22 @@ for dataset in repos_to_process: # ['14-may2019']: #
         add_to_graph((program_uri, EBUCore.title, Literal(fi_title)))
         add_to_graph((program_uri, EBUCore.title, Literal(se_title, lang='se')))
         add_to_graph((program_uri, EBUCore.mainTitle, Literal(main_title)))
-        add_to_graph((program_uri, EBUCore.hasLanguage, language))
+        add_to_graph((program_uri, EBUCore.hasLanguage, Literal(languages)))
         add_to_graph((program_uri, EBUCore.duration, duration_tc))
         add_to_graph((program_uri, EBUCore.version, Literal(version)))
         add_to_graph((program_uri, EBUCore.workingTitle, Literal(working_title)))
         add_to_graph((program_uri, EBUCore.dateArchived, archiving_date))
-        add_to_graph((program_uri, MeMAD.webDescription, Literal(web_desc)))
-        add_to_graph((program_uri, MeMAD.webDescription, Literal(web_desc_sw, lang='se')))
+        add_to_graph((program_uri, EBUCore.description, Literal(web_desc)))
+        add_to_graph((program_uri, EBUCore.description, Literal(web_desc_sw, lang='se')))
         add_to_graph((program_uri, EBUCore.hasTheme, Literal(class_content)))
         add_to_graph((program_uri, EBUCore.hasGenre, Literal(class_comb_a)))
         add_to_graph((program_uri, EBUCore.hasGenre, Literal(class_main)))
         add_to_graph((program_uri, EBUCore.hasGenre, Literal(class_sub)))
+        
+        if languages is not None:
+            for language in languages.split('/'):
+                language_uri = encode_uri('language', {'language': language})
+                add_to_graph((program_uri, EBUCore.hasLanguage, language_uri))
         
         # Media
         media_id           = root.find("./MAObject[1]/Meta/[@name='MEDIA_ID']").text
@@ -320,10 +367,11 @@ for dataset in repos_to_process: # ['14-may2019']: #
             subtitles_date_publised = transform('date', subtitles_date_publised)
 
             subtitles_uri = encode_uri('subtitling', {'n':i, 'program_uri': program_uri})
+            subtitles_language_uri = encode_uri('language', {'language': subtitles_language})
 
             add_to_graph((subtitles_uri, RDF.type, EBUCore.Subtitling))
             add_to_graph((program_uri, EBUCore.hasSubtitling, subtitles_uri))
-            add_to_graph((subtitles_uri, EBUCore.hasLanguage, subtitles_language))
+            add_to_graph((subtitles_uri, EBUCore.hasLanguage, subtitles_language_uri))
             add_to_graph((subtitles_uri, EBUCore.filename, Literal(subtitles_filename)))
             add_to_graph((subtitles_uri, EBUCore.hasFileFormat, subtitles_file_format))
             add_to_graph((subtitles_uri, EBUCore.dateIngested, subtitles_date_ingested))
@@ -338,12 +386,13 @@ for dataset in repos_to_process: # ['14-may2019']: #
             audio_note         = audio.find("./Meta[@name='PMA_NOTES']").text
 
             audio_language = transform('audio_language', audio_language)
-            
+            audio_language_uri = encode_uri('language', {'language': audio_language})
+
             audio_uri = encode_uri('audio', {'n':i, 'program_uri': program_uri})
 
             add_to_graph((audio_uri, RDF.type, EBUCore.AudioTrack))
             add_to_graph((program_uri, EBUCore.hasAudioTrack, audio_uri))
-            add_to_graph((audio_uri, EBUCore.hasLanguage, audio_language))
+            add_to_graph((audio_uri, EBUCore.hasLanguage, audio_language_uri))
             add_to_graph((audio_uri, SKOS.note, Literal(audio_note)))
             add_to_graph((audio_uri, EBUCore.sampleRate, Literal(audio_sample_rates, datatype=XSD.nonNegativeInteger)))
 
@@ -420,6 +469,8 @@ for dataset in repos_to_process: # ['14-may2019']: #
 
                     segment_uri = encode_uri('program', {'id': segment_content_id, 'parent': parent, 'source': 'yle'})
 
+                    # Check whether this actually works
+                    segment_dur   = transform('time', str(int(segment_end) - int(segment_begin)))
                     segment_start = transform('time', segment_begin)
                     segment_end   = transform('time', segment_end)
 
@@ -427,6 +478,7 @@ for dataset in repos_to_process: # ['14-may2019']: #
                     add_to_graph((program_uri, EBUCore.hasPart, segment_uri))
                     add_to_graph((segment_uri, EBUCore.start, segment_start))
                     add_to_graph((segment_uri, EBUCore.end, segment_end))
+                    add_to_graph((segment_uri, EBUCore.duration, segment_dur))
                     add_to_graph((segment_uri, EBUCore.description, Literal(segment_description)))
                     
                     segments_mapping.append((segment_content_id, str(program_uri), file, str(segment_start), str(segment_end)))
@@ -439,14 +491,16 @@ for dataset in repos_to_process: # ['14-may2019']: #
 
             if contributor_name:
                 try:
-                    contributor_role = transform('contributor_role', None if not contributor_role else contributor_role.strip())
-
                     contributor_uri = encode_uri('agent', {'name':contributor_name.strip()})
 
                     add_to_graph((contributor_uri, RDF.type, EBUCore.Agent))
                     add_to_graph((program_uri, EBUCore.hasContributor, contributor_uri))
                     add_to_graph((contributor_uri, EBUCore.agentName, Literal(contributor_name)))
-                    add_to_graph((contributor_uri, EBUCore.hasRole, contributor_role))
+                    
+                    if contributor_role:
+                        contributor_role = transform('contributor_role', contributor_role.strip())
+                        contributor_role_uri = encode_uri('role', {'role': contributor_role})
+                        add_to_graph((contributor_uri, EBUCore.hasRole, contributor_role_uri))
                 except:
                     print(filename, contributor_role)
 
@@ -469,70 +523,6 @@ if flow_mapping_file:
 	print('FLOW triplets generation..')
 
 	data = json.load(open(flow_mapping_file, 'r'))
-
-	"""
-	reset_graph()
-	found = []
-	unfound = []
-
-	for obj in data:
-	    try: 
-	        identifier = obj['name'].split('.')[0] + '.xml'
-	        try:
-	            program     = mapping_df[mapping_df['identifier'] == identifier].iloc[0]
-	        except:
-	            program     = mapping_df[mapping_df['identifier'] == identifier.replace('MEDIA', 'PROG')].iloc[0]
-	        program_uri = program['URI']
-	        media_uri   = URIRef(base + 'media/' + program_uri.split('/')[-1])
-	        flow_href   = URIRef(obj['flowHRef'])
-
-	        add_to_graph((media_uri, EBUCore.locator, flow_href))
-	        add_to_graph((media_uri, EBUCore.filename, Literal(obj['name'])))
-	        found.append(identifier)
-	    except Exception as e:
-	        unfound.append(identifier)
-
-
-	save_graph(path='data/dump/yle_flow_refs.ttl')
-
-	flow_mapping = []
-
-	for obj in data:
-	    if obj['name'][-4:] != '.mp4': continue
-	    try:
-	        identifier = obj['name'][:-4] + '.xml'
-	        flow_href   = URIRef(obj['flowHRef'])
-	        
-	        flow_mapping.append({'id': obj['name'], 'flow_href': flow_href})
-	                
-	    except Exception as e:
-	        print(str(e))
-	        pass
-
-	df_mapping_flow = pd.DataFrame(flow_mapping)
-	df_mapping_flow.to_csv('df_mapping_flow.csv', index=False)
-
-
-	print('Generating Flow and Filenames:')
-
-	data = json.load(open('file_mapping.json', 'r'))
-	mapping_filenames = []
-
-	for obj in data:
-	    filename = obj['name']
-	    mapping_filenames.append(filename)
-	print(mapping_filenames[:2], len(mapping_filenames))
-
-	flow_filenames = []
-	with open('flow_yle_filenames_export.csv') as f:
-	    for l in f:
-	        flow_filenames.append(l.split(';')[0])
-	print(flow_filenames[:2], len(flow_filenames))
-
-	yle_metadata_filenames = list(mapping_df['identifier'])
-	print(yle_metadata_filenames[:2], len(yle_metadata_filenames))
-	"""
-
 
 	yle_filenames = []
 	for dataset in os.listdir(data_path): # ['14-may2019']: # 

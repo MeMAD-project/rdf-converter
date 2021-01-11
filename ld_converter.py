@@ -1,31 +1,32 @@
 # -*- coding: utf-8 -*-
 
 import os
-from os.path import exists, dirname, join, isfile
-import pandas as pd
-import numpy as np
-from rdflib import Namespace, URIRef, ConjunctiveGraph, Literal
-from rdflib.namespace import FOAF, DC, SKOS, RDF, XSD, DCTERMS
-import urllib
 import re
+import time
 import json
 import pickle
-import unicodedata
-from hashlib import sha1
-import time
-from tqdm import tqdm
-import xml.etree.ElementTree as ET
+import urllib
 import datetime
-
-
 import argparse
+import unicodedata
+
+import numpy as np
+import pandas as pd
+import xml.etree.ElementTree as ET
+
+from tqdm import tqdm 
+from hashlib import sha1
+from os.path import exists, dirname, join, isfile
+from rdflib import Namespace, URIRef, ConjunctiveGraph, Literal
+from rdflib.namespace import FOAF, DC, SKOS, RDF, RDFS, XSD, DCTERMS
+
 
 parser = argparse.ArgumentParser(description='MeMAD Converter')
 parser.add_argument("-p", "--path", type=str, help="Specify the path for the file or folder to process", default='data/ld') #, required=True)
 parser.add_argument("-o", "--output", type=str, help="Specify the path to which the TTL output would be written.", default='data/dump/') #, required=True)
 parser.add_argument("-f", "--flow_mapping", type=str, help="Specify the path to a file containing the mapping between filenames and their Flow identifier.",
- default='data/yle/file_mapping.json') #, required=True)
-parser.add_argument("-k", "--keep_mappings", help="add this flag to generate CSV files for mapping Programmes to their URIs", action='store_true', default=False) #, required=True)
+ default='data/file_flow_mapping.json') #, required=True)
+parser.add_argument("-k", "--keep_mappings",  help="add this flag to generate CSV files for mapping Programmes to their URIs", action='store_true', default=True) #, required=True)
 
 
 args = parser.parse_args()
@@ -187,6 +188,14 @@ def encode_uri(resource, data):
         n = data['n']
         return URIRef(str(data['program_uri']) + '/publication/' + n)
 
+    elif resource == 'role':
+        role = str(data['role']).lower().replace(' ', '_')
+        return URIRef(base + 'role/' + role)
+
+    elif resource == 'language':
+        # all entries in INA-PA are in French
+        return URIRef(base + 'language/french')
+
     else:
         raise Exception('No URI encoding for resource ' + resource)
 
@@ -206,10 +215,29 @@ def time_after(t, d):
     d = datetime.timedelta(hours=d.hour, minutes=d.minute, seconds=d.second)
     return (d + t).time().strftime("%H:%M:%S")
 
+def add_vocabulary():
+    roles = json.load(open('mappings/ina_code2role.json'))
+
+    # print('Adding the following roles to the graph:', ', '.join(sorted(roles_en.values())))
+    
+    for label_fr, label_en in roles.items():
+        role_uri = URIRef(base + 'role/' + label_en.lower().replace(' ', '_'))
+        add_to_graph((role_uri, RDF.type, EBUCore.Role))
+        add_to_graph((role_uri, RDFS.label, Literal(label_en)))
+        add_to_graph((role_uri, RDFS.label, Literal(label_fr, lang='fr')))
+
+    fr_uri = URIRef(base + 'language/french')
+    add_to_graph((fr_uri, RDF.type, EBUCore.Language))
+    add_to_graph((fr_uri, RDFS.label, Literal('French')))
+    add_to_graph((fr_uri, RDFS.label, Literal('Français', lang='fr')))
+
+
 
 if len(df_eall) > 0:
 	reset_graph()
 	mapping = []
+
+	add_vocabulary()
 
 	for i, entry in tqdm(df_eall.iterrows(), total=len(df_eall)):
 	    try:
@@ -262,7 +290,7 @@ if len(df_eall) > 0:
 	    lead             = entry['Chapeau'].strip().replace('\r', '')
 	    producer_summary = entry['ResumeProducteur'].strip().replace('\r', '')
 	    duration         = transform('duration', entry['DureeSecondes'])
-	    
+	    language_uri     = encode_uri('language', {'language': 'Français'})
 
 	    add_to_graph((program_uri, DCTERMS.publisher, Literal("INA-LD")))
 	    add_to_graph((program_uri, RDF.type, program_type))
@@ -272,6 +300,8 @@ if len(df_eall) > 0:
 	    add_to_graph((program_uri, MeMAD.producerSummary, Literal(producer_summary)))
 	    add_to_graph((program_uri, MeMAD.lead, Literal(lead)))
 	    add_to_graph((program_uri, EBUCore.duration, duration))
+	    add_to_graph((program_uri, EBUCore.hasLanguage, language_uri))
+
 
 	    # Media
 	    Imedia_id        = entry['IdentifiantImedia']
@@ -317,9 +347,12 @@ if len(df_eall) > 0:
 	        agent_uri = encode_uri('agent', {'name': name})
 
 	        add_to_graph((agent_uri, RDF.type, EBUCore.Agent))
-	        add_to_graph((agent_uri, EBUCore.agentName, Literal(name)))
-	        add_to_graph((agent_uri, EBUCore.hasRole, Literal(role)))
 	        add_to_graph((program_uri, EBUCore.hasContributor, agent_uri))
+	        add_to_graph((agent_uri, EBUCore.agentName, Literal(name)))
+
+	        if role:
+	        	role_uri = encode_uri('role', {'role': role})
+	        	add_to_graph((agent_uri, EBUCore.hasRole, role_uri))
 
 	    # Pubevent
 	    pubevent_datetime     = transform('datetime', entry['startDate'])

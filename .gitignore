@@ -4,3 +4,6 @@ helpers/__pycache__/
 __init__.py
 data/
 data/*
+.gitignore
+*.csv
+*.ipynb
