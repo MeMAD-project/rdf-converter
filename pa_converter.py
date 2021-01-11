@@ -114,6 +114,9 @@ def transform(field, value):
         h, m, s = value.split(':')
         value = 'PT'+h+'H'+m+'M'+s[:2]+'S'
         return Literal(value, datatype=XSD.duration)
+    elif field == 'role':
+        roles = json.load(open('mappings/ina_code2role.json'))
+        return roles[value].lower()
     elif field == 'channel':
         channel_codes = json.load(open('mappings/ina_channel2code.json'))
         return channel_codes[value].lower()
@@ -422,7 +425,8 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
             add_to_graph((agent_uri, EBUCore.agentName, Literal(name)))
 
             if role:
-                role_uri = encode_uri('role', {'role': role})
+                t_role = transform('role', role)
+                role_uri = encode_uri('role', {'role': t_role})
                 add_to_graph((agent_uri, EBUCore.hasRole, role_uri))
 
 

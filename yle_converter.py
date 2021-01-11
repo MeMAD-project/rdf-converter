@@ -90,7 +90,6 @@ def clean_string(s):
     cleaned = cleaned.lower().strip('-')
     return cleaned
     
-
 def transform(field, value):
     """ Transform some values to a proper format : e.g. duration, URNs .. """ 
     """ Returns a rdflib.URI or a rdflib.Literal """
@@ -197,7 +196,17 @@ def encode_uri(resource, data):
     elif resource == 'role':
         role = str(data['role']).lower().replace(' ', '_')
         return URIRef(base + 'role/' + role)
-    
+
+    elif resource == 'genre':
+        genres = json.load(open('mappings/yle_class2label.json'))
+
+        genre_fi = data['genre']
+        if genre_fi in genres:
+            genre_en = genres[genre_fi]
+            return URIRef(base + 'genre/' + genre_en.lower().replace(' ', '_').replace('/', '_'))
+        else:
+            return Literal(genre_fi, lang='fi')
+
     else:
         raise Exception('No URI encoding for resource ' + resource)
 
@@ -234,6 +243,17 @@ def add_roles():
         add_to_graph((role_uri, RDFS.label, Literal(label_fi, lang='fi')))
 
 
+def add_genres():
+    genres = json.load(open('mappings/yle_class2label.json'))
+
+    for genre_fi, genre_en in genres.items():
+        genre_uri = URIRef(base + 'genre/' + genre_en.lower().replace(' ', '_').replace('/', '_'))
+        genre_label = genre_en[0].upper() + genre_en[1:]
+        add_to_graph((genre_uri, RDF.type, EBUCore.Genre))
+        add_to_graph((genre_uri, RDFS.label, Literal(genre_label)))
+        add_to_graph((genre_uri, RDFS.label, Literal(genre_fi, lang='fi')))
+
+
 mapping = []
 segments_mapping = []
 class_subs = set()
@@ -248,9 +268,10 @@ for dataset in repos_to_process: # ['14-may2019']: #
     # Adding controlled vocabularies to the Knowledge Graph
     add_languages()
     add_roles()
+    add_genres()
     
     files = os.listdir(data_path+dataset)
-    for ii, file in tqdm(enumerate(files)):
+    for ii, file in enumerate(tqdm(files)):
 
         root = ET.parse(data_path+dataset+'/'+file).getroot()
         guid = root.find("./MAObject[1]/GUID").text
@@ -297,12 +318,23 @@ for dataset in repos_to_process: # ['14-may2019']: #
         class_sub      = root.find("./MAObject[1]/Meta/[@name='CLASSIFICATION_SUB_CLASS']").text         
         web_desc       = root.find("./MAObject[1]/Meta/[@name='WEB_DESCRIPTION']").text 
         web_desc_sw    = root.find("./MAObject[1]/Meta/[@name='WEB_DESCRIPTION_SWE']").text 
-        
+
+        class_comb_a   = root.find("./MAObject[1]/Meta/[@name='CLASSIFICATION_COMB_A']").text 
+        class_content  = root.find("./MAObject[1]/Meta/[@name='CLASSIFICATION_CONTENT']").text 
+        class_main     = root.find("./MAObject[1]/Meta/[@name='CLASSIFICATION_MAIN_CLASS']").text 
+        class_sub      = root.find("./MAObject[1]/Meta/[@name='CLASSIFICATION_SUB_CLASS']").text         
+
         languages      = transform('episode_language', language)
         duration_tc    = transform('duration_tc', duration_tc)
         archiving_date = transform('date', archiving_date)
         class_sub      = class_sub if ']' not in class_sub else class_sub.split(']')[1][1:]
         class_subs.add(class_sub)
+
+        class_comb_a_uri   = encode_uri('genre', {'genre': class_comb_a})
+        class_content_uri  = encode_uri('genre', {'genre': class_content})
+        class_main_uri     = encode_uri('genre', {'genre': class_main})
+        class_sub_uri      = encode_uri('genre', {'genre': class_sub})
+
 
         add_to_graph((program_uri, RDF.type, EBUCore.TVProgramme))
         add_to_graph((program_uri, DCTERMS.publisher, Literal("Yle")))
@@ -322,10 +354,10 @@ for dataset in repos_to_process: # ['14-may2019']: #
         add_to_graph((program_uri, EBUCore.dateArchived, archiving_date))
         add_to_graph((program_uri, EBUCore.description, Literal(web_desc)))
         add_to_graph((program_uri, EBUCore.description, Literal(web_desc_sw, lang='se')))
-        add_to_graph((program_uri, EBUCore.hasTheme, Literal(class_content)))
-        add_to_graph((program_uri, EBUCore.hasGenre, Literal(class_comb_a)))
-        add_to_graph((program_uri, EBUCore.hasGenre, Literal(class_main)))
-        add_to_graph((program_uri, EBUCore.hasGenre, Literal(class_sub)))
+        add_to_graph((program_uri, EBUCore.hasGenre, class_content_uri))
+        add_to_graph((program_uri, EBUCore.hasGenre, class_comb_a_uri))
+        add_to_graph((program_uri, EBUCore.hasGenre, class_main_uri))
+        add_to_graph((program_uri, EBUCore.hasGenre, class_sub_uri))
         
         if languages is not None:
             for language in languages.split('/'):

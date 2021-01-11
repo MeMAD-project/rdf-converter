@@ -125,6 +125,10 @@ def transform(field, value):
     if field == 'channel':
         channel_codes = json.load(open('mappings/ina_channel2code.json'))
         return channel_codes[value].lower()
+    elif field == 'role':
+        roles = json.load(open('mappings/ina_code2role.json'))
+        return roles[value].lower()
+
     elif field == 'datetime':
         Y, M, D = value[:10].split('-')
         date = Y + '-' + M + '-' + D
@@ -142,6 +146,11 @@ def transform(field, value):
         s = str(value % 60)
         t = 'PT'+h.zfill(2)+'H'+m.zfill(2)+'M'+s.zfill(2)+'S'
         return Literal(t, datatype=XSD.duration)
+
+    elif field == 'contributor_role':
+        roles = json.load(open('mappings/yle_id2role.json'))
+        return roles[value] # value is the id
+
     elif field == 'end_datetime':
         try:
             date, duration = value
@@ -240,10 +249,13 @@ if len(df_eall) > 0:
 	add_vocabulary()
 
 	for i, entry in tqdm(df_eall.iterrows(), total=len(df_eall)):
+	    # if i == 100: break
+
 	    try:
 	        assert('Identifiant' in entry)  
 	    except Exception:
 	        raise Exception('The provided file doesn\'t have the appropriate Legal Deposit program format')
+
 
 	    # Source
 	    channel_name   = entry['Chaine']        
@@ -351,7 +363,8 @@ if len(df_eall) > 0:
 	        add_to_graph((agent_uri, EBUCore.agentName, Literal(name)))
 
 	        if role:
-	        	role_uri = encode_uri('role', {'role': role})
+	        	t_role = transform('role', role)
+	        	role_uri = encode_uri('role', {'role': t_role})
 	        	add_to_graph((agent_uri, EBUCore.hasRole, role_uri))
 
 	    # Pubevent
@@ -390,6 +403,7 @@ if len(df_sall) > 0:
 	segment_mapping = []
 
 	for i, entry in tqdm(df_sall.iterrows(), total=len(df_sall)):
+	    # if i == 100: break
 
 	    try:
 	        assert('Identifiant' in entry)  
@@ -463,8 +477,12 @@ if len(df_sall) > 0:
 
 	        add_to_graph((agent_uri, RDF.type, EBUCore.Agent))
 	        add_to_graph((agent_uri, EBUCore.agentName, Literal(name)))
-	        add_to_graph((agent_uri, EBUCore.hasRole, Literal(role)))
 	        add_to_graph((segment_uri, EBUCore.hasContributor, agent_uri))
+
+	        if role:
+	        	t_role = transform('role', role)
+		        role_uri = encode_uri('role', {'role': t_role})
+		        add_to_graph((agent_uri, EBUCore.hasRole, role_uri))
 
 	    # Pubevent
 	    pubevent_datetime     = transform('datetime', entry['startDate'])

@@ -1,0 +1,123 @@
+@prefix : <http://data.memad.eu/ontology#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix ebucore: <http://www.ebu.ch/metadata/ontologies/ebucore/ebucore#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix vann: <http://purl.org/vocab/vann/> .
+
+
+<http://data.memad.eu/ontology#> a owl:Ontology ;
+                                     vann:preferredNamespaceUri "http://data.memad.eu/ontology#" ;
+                                     dct:issued "2019-01-10"^^xsd:date .
+
+
+
+###########################################
+# Classes
+###########################################
+
+
+:FirstRun a owl:Class ;
+    rdfs:label "First Run"@en,
+        "Première diffusion"@fr ;
+    rdfs:comment "Links a program to its first publication event (when provided)" ;
+    rdfs:subClassOf ebucore:PublicationEvent .
+
+:Record a owl:Class ;
+    rdfs:label "Record"@en,
+        "Notice"@fr ;
+    rdfs:comment "Defines a bibliographical object describing any other editorial object (Programme, Part, ..)" ;
+    rdfs:subClassOf ebucore:BibliographicalObject .
+
+:Timeslot a owl:Class ;
+    rdfs:label "Timeslot"@en,
+        "Tranche horaire"@fr ;
+    rdfs:comment "Defines a collection of programs that are scheduled on a given period or time interval, e.g. \"Les matins de France Culture\", \"Mercredi c'est ciné\"" ;
+    rdfs:subClassOf ebucore:Collection .
+
+
+###########################################
+# Individuals
+###########################################
+
+
+:lead a owl:DatatypeProperty ;
+    rdfs:label "Lead"@en,
+        "Chapeau"@fr ;
+    rdfs:comment "A short summary of the programme" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf ebucore:description .
+
+:titleNote a owl:DatatypeProperty ;
+    rdfs:label "Title note"@en,
+        "Note de titre"@fr ;
+    rdfs:comment "A note to further describe the title of the programme" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf ebucore:description .
+
+:producerSummary a owl:DatatypeProperty ;
+    rdfs:label "Producer summary"@en,
+        "Résumé du producteur"@fr ;
+    rdfs:comment "A short summary provided by the producer of the programme" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf ebucore:description .
+
+:sequence a owl:DatatypeProperty ;
+    rdfs:label "Sequence"@en,
+        "Séquence"@fr ;
+    rdfs:comment "A textual description of this program's content" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf ebucore:description .
+
+:hardware a owl:DatatypeProperty ;
+    rdfs:label "Hardware"@en,
+        "Matériel"@fr ;
+    rdfs:comment "The hardware being used for recording a media resource" ;
+    rdfs:domain ebucore:MediaResource ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf ebucore:resourceDescription .
+
+:hasRecord a owl:ObjectProperty ;
+    rdfs:label "has record"@en ;
+    rdfs:comment "Links a record to this Editorial Object" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range :Record ;
+    rdfs:subPropertyOf ebucore:references .
+
+:legalNote a owl:DatatypeProperty ;
+    rdfs:label "Legal note"@en,
+        "Note juridique"@en ;
+    rdfs:comment "A legal note attached to this editorial object" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf <http://www.w3.org/2004/02/skos/core#note> .
+
+:hasISANIdentifier a owl:DatatypeProperty ;
+    rdfs:label "Identifiant ISAN"@en,
+        "has ISAN identifier"@en ;
+    rdfs:comment "The ISAN identifier for this program" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf ebucore:hasIdentifier .
+
+:hasImediaIdentifier a owl:DatatypeProperty ;
+    rdfs:label "Identifiant Imedia"@en,
+        "has Imedia identifier"@en ;
+    rdfs:comment "The Imedia identifier for this program" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf ebucore:hasIdentifier .
+
+:hasMetroIdentifier a owl:DatatypeProperty ;
+    rdfs:label "Identifiant Metro"@en,
+        "has Metro identifier"@en ;
+    rdfs:comment "The Metro identifier for this program" ;
+    rdfs:domain ebucore:EditorialObject ;
+    rdfs:range xsd:String ;
+    rdfs:subPropertyOf ebucore:hasIdentifier .
