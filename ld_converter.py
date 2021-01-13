@@ -113,7 +113,7 @@ def add_to_graph(triplet, signal_empty_values=False):
 
 def clean_string(s):
     """ Transforming any text strings into valid ascii slugs """
-    to_dash = '\\/\',.":;[]()!? #=&$%@{«°»¿=>+*\u0019\xa0' # \u0019 is NOT utf8-frieldy 
+    to_dash = '\\/\',.":;^[]()!? #=&$%@{«°»¿=>+*\u0019\xa0' # \u0019 is NOT utf8-frieldy 
     cleaned = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
     cleaned = ''.join('-' if c in to_dash else c for c in cleaned)
     cleaned = ''.join(c if i == 0 or (c == '-' and cleaned[i-1]) != '-' else '' for i, c in enumerate(cleaned))
@@ -128,6 +128,12 @@ def transform(field, value):
     elif field == 'role':
         roles = json.load(open('mappings/ina_code2role.json'))
         return roles[value].lower()
+    elif field == 'genre':
+        genres = json.load(open('mappings/ina_genres.json'))
+        return genres[value].lower()
+    elif field == 'theme':
+        themes = json.load(open('mappings/ina_themes.json'))
+        return themes[value].lower()
 
     elif field == 'datetime':
         Y, M, D = value[:10].split('-')
@@ -201,6 +207,19 @@ def encode_uri(resource, data):
         role = str(data['role']).lower().replace(' ', '_')
         return URIRef(base + 'role/' + role)
 
+    elif resource == 'genre':
+        genre = str(data['genre']).lower().replace(' ', '_')
+        return URIRef(base + 'genre/' + genre)
+
+    elif resource == 'theme':
+        theme = str(data['theme']).lower().replace(' ', '_')
+        return URIRef(base + 'theme/' + theme)
+
+    elif resource == 'keyword':
+        keyword = clean_string(data['keyword'].lower().replace(' ', '_')) # remove accents
+        keyword = keyword.split('(')[0] # remove any parenthesis
+        return URIRef(base + 'keyword/' + keyword)
+
     elif resource == 'language':
         # all entries in INA-PA are in French
         return URIRef(base + 'language/french')
@@ -226,6 +245,8 @@ def time_after(t, d):
 
 def add_vocabulary():
     roles = json.load(open('mappings/ina_code2role.json'))
+    genres = json.load(open('mappings/ina_genres.json'))
+    themes = json.load(open('mappings/ina_themes.json'))
 
     # print('Adding the following roles to the graph:', ', '.join(sorted(roles_en.values())))
     
@@ -234,6 +255,18 @@ def add_vocabulary():
         add_to_graph((role_uri, RDF.type, EBUCore.Role))
         add_to_graph((role_uri, RDFS.label, Literal(label_en)))
         add_to_graph((role_uri, RDFS.label, Literal(label_fr, lang='fr')))
+
+    for label_fr, label_en in genres.items():
+        genre_uri = URIRef(base + 'genre/' + label_en.lower().replace(' ', '_'))
+        add_to_graph((genre_uri, RDF.type, EBUCore.Genre))
+        add_to_graph((genre_uri, RDFS.label, Literal(label_en)))
+        add_to_graph((genre_uri, RDFS.label, Literal(label_fr, lang='fr')))
+
+    for label_fr, label_en in themes.items():
+        theme_uri = URIRef(base + 'theme/' + label_en.lower().replace(' ', '_'))
+        add_to_graph((theme_uri, RDF.type, EBUCore.Theme))
+        add_to_graph((theme_uri, RDFS.label, Literal(label_en)))
+        add_to_graph((theme_uri, RDFS.label, Literal(label_fr, lang='fr')))
 
     fr_uri = URIRef(base + 'language/french')
     add_to_graph((fr_uri, RDF.type, EBUCore.Language))
@@ -249,7 +282,7 @@ if len(df_eall) > 0:
 	add_vocabulary()
 
 	for i, entry in tqdm(df_eall.iterrows(), total=len(df_eall)):
-	    # if i == 100: break
+	    # if i == 1000: break
 
 	    try:
 	        assert('Identifiant' in entry)  
@@ -307,10 +340,10 @@ if len(df_eall) > 0:
 	    add_to_graph((program_uri, DCTERMS.publisher, Literal("INA-LD")))
 	    add_to_graph((program_uri, RDF.type, program_type))
 	    add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id)))
-	    add_to_graph((program_uri, EBUCore.title, Literal(title)))
-	    add_to_graph((program_uri, EBUCore.summary, Literal(summary)))
-	    add_to_graph((program_uri, MeMAD.producerSummary, Literal(producer_summary)))
-	    add_to_graph((program_uri, MeMAD.lead, Literal(lead)))
+	    add_to_graph((program_uri, EBUCore.title, Literal(title, lang='fr')))
+	    add_to_graph((program_uri, EBUCore.summary, Literal(summary, lang='fr')))
+	    add_to_graph((program_uri, MeMAD.producerSummary, Literal(producer_summary, lang='fr')))
+	    add_to_graph((program_uri, MeMAD.lead, Literal(lead, lang='fr')))
 	    add_to_graph((program_uri, EBUCore.duration, duration))
 	    add_to_graph((program_uri, EBUCore.hasLanguage, language_uri))
 
@@ -330,23 +363,31 @@ if len(df_eall) > 0:
 	    # Genres
 	    genres     = entry['Genres'].strip().split('|')
 	    for genre in genres:
-	        if genre.strip() : add_to_graph((program_uri, EBUCore.hasGenre, Literal(genre)))
-	            
+	        if genre.strip(): 
+	        	genre_uri = encode_uri('genre', {'genre': transform('genre', genre.strip())})
+	        	add_to_graph((program_uri, EBUCore.hasGenre, genre_uri))
+	    
+	    # Themes
+	    themes     = entry['Thematique'].strip().split('|')
+	    for theme in themes:
+	        if theme.strip(): 
+	        	theme_uri = encode_uri('theme', {'theme': transform('theme', theme.strip())})
+	        	add_to_graph((program_uri, EBUCore.hasTheme, theme_uri))
+
 	    # Keywords
 	    keywords   = entry['Descripteurs'].strip().split('|')
 	    for keyword in keywords:
-	        if keyword.strip() : add_to_graph((program_uri, EBUCore.hasKeyword, Literal(keyword)))
+	        if keyword.strip(): 
+	        	keyword_uri = encode_uri('keyword', {'keyword': keyword.strip()})
+	        	add_to_graph((keyword_uri, RDF.type, EBUCore.Keyword))
+	        	add_to_graph((keyword_uri, RDFS.label, Literal(keyword, lang="fr")))
+	        	add_to_graph((program_uri, EBUCore.hasKeyword, keyword_uri))
 
 	    # Producers
 	    producers  = entry['Producteurs'].strip().split('|')
 	    for producer in producers:
 	        if producer.strip() : add_to_graph((program_uri, EBUCore.hasProducer, Literal(producer)))
-	    
-	    # Themes
-	    themes     = entry['Thematique'].strip().split('|')
-	    for theme in themes:
-	        if theme.strip() : add_to_graph((program_uri, EBUCore.hasTheme, Literal(theme)))
-	    
+
 	    # Contributors
 	    credits    = entry['Generiques'].strip().split('|')
 	    for credit in credits:
@@ -454,15 +495,19 @@ if len(df_sall) > 0:
 	    add_to_graph((segment_uri, RDF.type, EBUCore.Part))
 	    add_to_graph((segment_uri, EBUCore.hasIdentifier, Literal(segment_id)))
 	    add_to_graph((program_uri, EBUCore.hasPart, segment_uri))
-	    add_to_graph((segment_uri, EBUCore.title, Literal(title)))
-	    add_to_graph((segment_uri, MeMAD.lead, Literal(lead)))
+	    add_to_graph((segment_uri, EBUCore.title, Literal(title, lang='fr')))
+	    add_to_graph((segment_uri, MeMAD.lead, Literal(lead, lang='fr')))
 	    add_to_graph((segment_uri, EBUCore.duration, duration))
 
 	    
 	    # Keywords
 	    keywords   = entry['Descripteurs'].strip().split('|')
 	    for keyword in keywords:
-	        if keyword.strip() : add_to_graph((segment_uri, EBUCore.hasKeyword, Literal(keyword)))
+	        if keyword.strip(): 
+	        	keyword_uri = encode_uri('keyword', {'keyword': keyword.strip()})
+	        	add_to_graph((keyword_uri, RDF.type, EBUCore.Keyword))
+	        	add_to_graph((keyword_uri, RDFS.label, Literal(keyword, lang="fr")))
+	        	add_to_graph((segment_uri, EBUCore.hasKeyword, keyword_uri))
 
 	    # Contributors
 	    credits    = entry['Generique'].strip().split('|')

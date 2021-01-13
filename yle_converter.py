@@ -207,6 +207,7 @@ def encode_uri(resource, data):
         else:
             return Literal(genre_fi, lang='fi')
 
+
     else:
         raise Exception('No URI encoding for resource ' + resource)
 
@@ -343,16 +344,16 @@ for dataset in repos_to_process: # ['14-may2019']: #
         # add_to_graph((program_uri, EBUCore.filename, Literal(filename)))
         add_to_graph((program_uri, EBUCore.hasSubject, Literal(subject)))
         add_to_graph((program_uri, EBUCore.episodeNumber, Literal(number)))
-        add_to_graph((program_uri, EBUCore.description, Literal(description)))
-        add_to_graph((program_uri, EBUCore.title, Literal(fi_title)))
+        add_to_graph((program_uri, EBUCore.description, Literal(description, lang='fi')))
+        add_to_graph((program_uri, EBUCore.title, Literal(fi_title, lang='fi')))
         add_to_graph((program_uri, EBUCore.title, Literal(se_title, lang='se')))
         add_to_graph((program_uri, EBUCore.mainTitle, Literal(main_title)))
-        add_to_graph((program_uri, EBUCore.hasLanguage, Literal(languages)))
+        add_to_graph((program_uri, EBUCore.hasLanguage, Literal(languages, lang='fi')))
         add_to_graph((program_uri, EBUCore.duration, duration_tc))
         add_to_graph((program_uri, EBUCore.version, Literal(version)))
         add_to_graph((program_uri, EBUCore.workingTitle, Literal(working_title)))
         add_to_graph((program_uri, EBUCore.dateArchived, archiving_date))
-        add_to_graph((program_uri, EBUCore.description, Literal(web_desc)))
+        add_to_graph((program_uri, EBUCore.description, Literal(web_desc, lang='fi')))
         add_to_graph((program_uri, EBUCore.description, Literal(web_desc_sw, lang='se')))
         add_to_graph((program_uri, EBUCore.hasGenre, class_content_uri))
         add_to_graph((program_uri, EBUCore.hasGenre, class_comb_a_uri))
@@ -511,7 +512,7 @@ for dataset in repos_to_process: # ['14-may2019']: #
                     add_to_graph((segment_uri, EBUCore.start, segment_start))
                     add_to_graph((segment_uri, EBUCore.end, segment_end))
                     add_to_graph((segment_uri, EBUCore.duration, segment_dur))
-                    add_to_graph((segment_uri, EBUCore.description, Literal(segment_description)))
+                    add_to_graph((segment_uri, EBUCore.description, Literal(segment_description, lang='fi')))
                     
                     segments_mapping.append((segment_content_id, str(program_uri), file, str(segment_start), str(segment_end)))
 
@@ -540,7 +541,7 @@ for dataset in repos_to_process: # ['14-may2019']: #
         mapping.append((file, str(program_uri)))
     
     print('saving into', f'{output_path}{dataset}.ttl')
-    save_graph(path=f'{output_path}{dataset}.ttl')
+    save_graph(path=f'{output_path}{"yle_"+dataset}.ttl')
 
 print('Time elapsed:', round(time.time() - tick, 2), 'seconds.')
 

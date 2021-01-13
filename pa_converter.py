@@ -100,7 +100,7 @@ def add_to_graph(triplet, signal_empty_values=False):
 
 def clean_string(s):
     """ Transforming any text strings into valid ascii slugs """
-    to_dash = '\\/\',.":;[]()!? #=&$%@{«°»¿=>+*\xa0'
+    to_dash = '\\/\',.":;^[]()!? #=&$%@{«°»¿=>+*\xa0'
     cleaned = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
     cleaned = ''.join('-' if c in to_dash else c for c in cleaned)
     cleaned = ''.join(c if i == 0 or (c == '-' and cleaned[i-1]) != '-' else '' for i, c in enumerate(cleaned))
@@ -132,6 +132,17 @@ def transform(field, value):
         D, M, Y = value.split('/')
         date = Y + '-' + M + '-' + D
         return Literal(date, datatype=XSD.date)
+
+    elif field == 'role':
+        roles = json.load(open('mappings/ina_code2role.json'))
+        return roles[value].lower()
+    elif field == 'genre':
+        genres = json.load(open('mappings/ina_genres.json'))
+        return genres[value].lower()
+    elif field == 'theme':
+        themes = json.load(open('mappings/ina_themes.json'))
+        return themes[value].lower()
+
     else:
         raise Exception('No transformation defined for field ' + field + '( value ) :' + str(value))
 
@@ -174,6 +185,19 @@ def encode_uri(resource, data):
     elif resource == 'role':
         role = str(data['role']).lower().replace(' ', '_')
         return URIRef(base + 'role/' + role)
+
+    elif resource == 'genre':
+        genre = str(data['genre']).lower().replace(' ', '_')
+        return URIRef(base + 'genre/' + genre)
+
+    elif resource == 'theme':
+        theme = str(data['theme']).lower().replace(' ', '_')
+        return URIRef(base + 'theme/' + theme)
+
+    elif resource == 'keyword':
+        keyword = clean_string(data['keyword'].lower().replace(' ', '_')) # remove accents
+        keyword = keyword.split('(')[0] # remove any parenthesis
+        return URIRef(base + 'keyword/' + keyword)
 
     elif resource == 'language':
         # all entries in INA-PA are in French
@@ -226,6 +250,8 @@ def preprocess_content(t):
 
 def add_vocabulary():
     roles = json.load(open('mappings/ina_code2role.json'))
+    genres = json.load(open('mappings/ina_genres.json'))
+    themes = json.load(open('mappings/ina_themes.json'))
 
     # print('Adding the following roles to the graph:', ', '.join(sorted(roles_en.values())))
     
@@ -234,6 +260,18 @@ def add_vocabulary():
         add_to_graph((role_uri, RDF.type, EBUCore.Role))
         add_to_graph((role_uri, RDFS.label, Literal(label_en)))
         add_to_graph((role_uri, RDFS.label, Literal(label_fr, lang='fr')))
+
+    for label_fr, label_en in genres.items():
+        genre_uri = URIRef(base + 'genre/' + label_en.lower().replace(' ', '_'))
+        add_to_graph((genre_uri, RDF.type, EBUCore.Genre))
+        add_to_graph((genre_uri, RDFS.label, Literal(label_en)))
+        add_to_graph((genre_uri, RDFS.label, Literal(label_fr, lang='fr')))
+
+    for label_fr, label_en in themes.items():
+        theme_uri = URIRef(base + 'theme/' + label_en.lower().replace(' ', '_'))
+        add_to_graph((theme_uri, RDF.type, EBUCore.Theme))
+        add_to_graph((theme_uri, RDFS.label, Literal(label_en)))
+        add_to_graph((theme_uri, RDFS.label, Literal(label_fr, lang='fr')))
 
     fr_uri = URIRef(base + 'language/french')
     add_to_graph((fr_uri, RDF.type, EBUCore.Language))
@@ -335,14 +373,14 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     add_to_graph((program_uri, DCTERMS.publisher, Literal("INA-PA")))
     add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id)))
     add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id_2)))
-    add_to_graph((program_uri, EBUCore.title, Literal(title)))
-    add_to_graph((program_uri, EBUCore.summary, Literal(summary)))
+    add_to_graph((program_uri, EBUCore.title, Literal(title, lang='fr')))
+    add_to_graph((program_uri, EBUCore.summary, Literal(summary, lang='fr')))
     add_to_graph((program_uri, EBUCore.duration, transform('duration', duration)))
-    add_to_graph((program_uri, MeMAD.titleNotes, Literal(title_notes)))
+    add_to_graph((program_uri, MeMAD.titleNotes, Literal(title_notes, lang='fr')))
     add_to_graph((program_uri, MeMAD.corpus, Literal(corpus)))
     add_to_graph((program_uri, SKOS.note, Literal(('[Notes] ' + notes) if notes else None)))
     add_to_graph((program_uri, SKOS.note, Literal(('[Legal Notes] ' + legal_notes) if legal_notes else None)))
-    add_to_graph((program_uri, MeMAD.log, Literal(sequences)))
+    add_to_graph((program_uri, MeMAD.log, Literal(sequences, lang='fr')))
     add_to_graph((program_uri, MeMAD.broadcasting, Literal(broadcasting)))
 
 
@@ -354,9 +392,9 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     # TV-only metadata
     isan_number      = entry['Numéro ISAN'].strip()
 
-    add_to_graph((program_uri, MeMAD.lead, Literal(lead)))
+    add_to_graph((program_uri, MeMAD.lead, Literal(lead, lang='fr')))
     add_to_graph((program_uri, EBUCore.dateCreated, Literal(recording_date)))
-    add_to_graph((program_uri, MeMAD.producerSummary, Literal(producer_summary)))
+    add_to_graph((program_uri, MeMAD.producerSummary, Literal(producer_summary, lang='fr')))
     add_to_graph((program_uri, MeMAD.hasISANIdentifier, Literal(isan_number)))
 
 
@@ -436,7 +474,10 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
         keyword = keyword.strip()
         if keyword: 
             keyword = keyword[4:].strip()
-            add_to_graph((program_uri, EBUCore.hasKeyword, Literal(keyword)))
+            keyword_uri = encode_uri('keyword', {'keyword': keyword})
+            add_to_graph((keyword_uri, RDF.type, EBUCore.Keyword))
+            add_to_graph((keyword_uri, RDFS.label, Literal(keyword, lang="fr")))
+            add_to_graph((program_uri, EBUCore.hasKeyword, keyword_uri))
 
 
     # Genres
@@ -444,7 +485,8 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     for genre in genres:
         genre = genre.strip()
         if genre : 
-            add_to_graph((program_uri, EBUCore.hasGenre, Literal(genre)))
+            genre_uri = encode_uri('genre', {'genre': transform('genre', genre)})
+            add_to_graph((program_uri, EBUCore.hasGenre, genre_uri))
 
 
     # Themes
@@ -452,7 +494,9 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     for theme in themes:
         theme = theme.strip()
         if theme : 
-            add_to_graph((program_uri, EBUCore.hasTheme, Literal(theme)))
+            theme_uri = encode_uri('theme', {'theme': transform('theme', theme)})
+            add_to_graph((program_uri, EBUCore.hasTheme, theme_uri))
+
 
 
     # Publication Events
@@ -607,7 +651,7 @@ if subtitles_path:
             counters[identifier] += 1
 
             add_to_graph((textline_uri, RDF.type, EBUCore.TextLine))
-            add_to_graph((textline_uri, EBUCore.textLineContent, Literal(entry['content'])))
+            add_to_graph((textline_uri, EBUCore.textLineContent, Literal(entry['content'], lang='fr')))
             add_to_graph((textline_uri, EBUCore.textLineLanguage, encode_uri('language', {'language': 'Français'})))
             add_to_graph((textline_uri, EBUCore.textLineSource, Literal('ASR (Vocapia Research 5.1)')))
             add_to_graph((textline_uri, EBUCore.textLineStartTime, Literal(entry['start'], datatype=XSD.time)))
@@ -619,7 +663,7 @@ if subtitles_path:
 
     print('Serializing the subtitles ..')
     tick = time.time()
-    save_graph(path=output_path+'ina_subtitles.ttl')
+    save_graph(path=output_path+'pa_subtitles.ttl')
     print('Time to save:', round(time.time() - tick, 2), "seconds")
 
 
