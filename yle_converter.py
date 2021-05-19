@@ -292,7 +292,7 @@ for dataset in repos_to_process: # ['14-may2019']: #
             add_to_graph((series_uri, RDF.type, EBUCore.Series))
             add_to_graph((series_uri, RDF.type, EBUCore.Collection))
             add_to_graph((series_uri, EBUCore.title, Literal(series_name)))
-            add_to_graph((series_uri, EBUCore.hasIdentifier, Literal(series_id)))
+            #add_to_graph((series_uri, EBUCore.hasIdentifier, Literal(series_id)))
             add_to_graph((series_uri, EBUCore.isParentOf, program_uri))
             add_to_graph((program_uri, RDF.type, EBUCore.Episode))
 
@@ -339,8 +339,9 @@ for dataset in repos_to_process: # ['14-may2019']: #
 
         add_to_graph((program_uri, RDF.type, EBUCore.TVProgramme))
         add_to_graph((program_uri, DCTERMS.publisher, Literal("Yle")))
-        add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(guid)))
-        add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(filename.split('.')[0])))
+        # add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(guid)))
+        # add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(filename.split('.')[0])))
+        add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_uri.split('/')[-1])))
         # add_to_graph((program_uri, EBUCore.filename, Literal(filename)))
         add_to_graph((program_uri, EBUCore.hasSubject, Literal(subject)))
         add_to_graph((program_uri, EBUCore.episodeNumber, Literal(number)))
@@ -508,6 +509,7 @@ for dataset in repos_to_process: # ['14-may2019']: #
                     segment_end   = transform('time', segment_end)
 
                     add_to_graph((segment_uri, RDF.type, EBUCore.Part))
+                    add_to_graph((segment_uri, EBUCore.hasIdentifier, Literal(segment_uri.split('/')[-1])))
                     add_to_graph((program_uri, EBUCore.hasPart, segment_uri))
                     add_to_graph((segment_uri, EBUCore.start, segment_start))
                     add_to_graph((segment_uri, EBUCore.end, segment_end))

@@ -339,7 +339,8 @@ if len(df_eall) > 0:
 
 	    add_to_graph((program_uri, DCTERMS.publisher, Literal("INA-LD")))
 	    add_to_graph((program_uri, RDF.type, program_type))
-	    add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id)))
+	    add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_uri.split('/')[-1])))
+        # add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id)))
 	    add_to_graph((program_uri, EBUCore.title, Literal(title, lang='fr')))
 	    add_to_graph((program_uri, EBUCore.summary, Literal(summary, lang='fr')))
 	    add_to_graph((program_uri, MeMAD.producerSummary, Literal(producer_summary, lang='fr')))
@@ -357,8 +358,8 @@ if len(df_eall) > 0:
 	    add_to_graph((media_uri, RDF.type, EBUCore.MediaResource))
 	    add_to_graph((program_uri, EBUCore.isInstantiatedBy, media_uri))
 
-	    add_to_graph((media_uri, MeMAD.hasImediaIdentifier, Literal(Imedia_id)))
-	    add_to_graph((media_uri, MeMAD.hasMediametrieIdentifier, Literal(Mediametrie_id)))
+	    # add_to_graph((media_uri, MeMAD.hasImediaIdentifier, Literal(Imedia_id)))
+	    # add_to_graph((media_uri, MeMAD.hasMediametrieIdentifier, Literal(Mediametrie_id)))
 
 	    # Genres
 	    genres     = entry['Genres'].strip().split('|')
@@ -493,9 +494,10 @@ if len(df_sall) > 0:
 	    duration         = transform('duration', entry['DureeSecondes'])
 
 	    add_to_graph((segment_uri, RDF.type, EBUCore.Part))
-	    add_to_graph((segment_uri, EBUCore.hasIdentifier, Literal(segment_id)))
+	    add_to_graph((segment_uri, EBUCore.hasIdentifier, Literal(segment_uri.split('/')[-1])))
 	    add_to_graph((program_uri, EBUCore.hasPart, segment_uri))
 	    add_to_graph((segment_uri, EBUCore.title, Literal(title, lang='fr')))
+        # add_to_graph((segment_uri, EBUCore.hasIdentifier, Literal(segment_id)))
 	    add_to_graph((segment_uri, MeMAD.lead, Literal(lead, lang='fr')))
 	    add_to_graph((segment_uri, EBUCore.duration, duration))
 

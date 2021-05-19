@@ -352,7 +352,7 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
     else:
         program_type = EBUCore.RadioProgramme if radio_program else EBUCore.TVProgramme
         add_to_graph((program_uri, RDF.type, program_type))
-        
+            
         if collection_uri: add_to_graph((collection_uri, EBUCore.isParentOf, program_uri))
         if timeslot_uri  : add_to_graph((timeslot_uri, EBUCore.isParentOf, program_uri))
     
@@ -371,8 +371,9 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
 
 
     add_to_graph((program_uri, DCTERMS.publisher, Literal("INA-PA")))
-    add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id)))
-    add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id_2)))
+    # add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id)))
+    # add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_id_2)))
+    add_to_graph((program_uri, EBUCore.hasIdentifier, Literal(program_uri.split('/')[-1])))
     add_to_graph((program_uri, EBUCore.title, Literal(title, lang='fr')))
     add_to_graph((program_uri, EBUCore.summary, Literal(summary, lang='fr')))
     add_to_graph((program_uri, EBUCore.duration, transform('duration', duration)))
@@ -412,8 +413,9 @@ for i, entry in tqdm(df_all.iterrows(), total=len(df_all)):
 
     add_to_graph((record_uri, RDF.type, MeMAD.Record))
     add_to_graph((program_uri, MeMAD.hasRecord, record_uri))
-    add_to_graph((record_uri, EBUCore.hasIdentifier, Literal(program_id)))
-    add_to_graph((record_uri, EBUCore.hasIdentifier, Literal(program_id_2)))
+    #add_to_graph((record_uri, EBUCore.hasIdentifier, Literal(program_id)))
+    #add_to_graph((record_uri, EBUCore.hasIdentifier, Literal(program_id_2)))
+    add_to_graph((record_uri, EBUCore.hasIdentifier, Literal(program_uri.split('/')[-1])))
     add_to_graph((record_uri, EBUCore.dateCreated, t_creation_date))
     add_to_graph((record_uri, EBUCore.dateModified, t_update_date))
     add_to_graph((record_uri, EBUCore.hasLanguage, language_uri))
